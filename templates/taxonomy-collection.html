@@ -1,0 +1,32 @@
+<!-- wp:template-part {"slug":"header","tagName":"header"} /-->
+
+<!-- wp:group {"tagName":"main","className":"wj-archive-shell","layout":{"type":"constrained"}} -->
+<!-- wp:group {"className":"wj-page-intro wj-archive-intro","layout":{"type":"constrained"}} -->
+<!-- wp:archive-title {"type":"archive","showPrefix":false,"level":1} /-->
+<!-- wp:term-description /-->
+<!-- /wp:group -->
+
+<!-- wp:shortcode -->
+[item_browser]
+<!-- /wp:shortcode -->
+
+<!-- wp:query {"queryId":1,"query":{"inherit":true},"className":"wj-results-query","displayLayout":{"type":"grid","columns":3}} -->
+<!-- wp:post-template {"layout":{"type":"grid","columnCount":3}} -->
+<!-- wp:group {"className":"wj-item-card","layout":{"type":"constrained"}} -->
+<!-- wp:post-featured-image {"isLink":true,"sizeSlug":"wj-card"} /-->
+<!-- wp:post-title {"level":3,"isLink":true} /-->
+<!-- wp:shortcode -->
+[item_card_meta]
+<!-- /wp:shortcode -->
+<!-- /wp:group -->
+<!-- /wp:post-template -->
+
+<!-- wp:query-pagination -->
+<!-- wp:query-pagination-previous /-->
+<!-- wp:query-pagination-numbers /-->
+<!-- wp:query-pagination-next /-->
+<!-- /wp:query-pagination -->
+<!-- /wp:query -->
+<!-- /wp:group -->
+
+<!-- wp:template-part {"slug":"footer","tagName":"footer"} /-->
