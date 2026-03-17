@@ -46,6 +46,10 @@ function wj_render_item_metabox(WP_Post $post): void {
 }
 
 function wj_sanitize_meta_input(string $meta_key, $value, string $type) {
+	if ('item_sort_date' === $meta_key) {
+		return wj_normalize_sort_date((string) $value);
+	}
+
 	if ('integer' === $type) {
 		$year = absint($value);
 		return $year ?: '';
@@ -84,8 +88,85 @@ function wj_save_item_meta(int $post_id): void {
 		$value = wp_unslash($_POST[$meta_key]);
 		update_post_meta($post_id, $meta_key, wj_sanitize_meta_input($meta_key, $value, $type));
 	}
+
+	$sort_date = (string) get_post_meta($post_id, 'item_sort_date', true);
+	$display_date = (string) get_post_meta($post_id, 'item_date_display', true);
+	$item_year = (string) get_post_meta($post_id, 'item_year', true);
+
+	if (!$sort_date) {
+		$sort_date = wj_derive_sort_date($display_date, $item_year);
+		if ($sort_date) {
+			update_post_meta($post_id, 'item_sort_date', $sort_date);
+		}
+	}
+
+	if ($sort_date) {
+		update_post_meta($post_id, 'item_year', wj_get_sort_date_year($sort_date));
+	}
 }
 add_action('save_post_collection_item', 'wj_save_item_meta');
+
+function wj_collection_item_admin_columns(array $columns): array {
+	$updated_columns = [];
+
+	foreach ($columns as $key => $label) {
+		$updated_columns[$key] = $label;
+
+		if ('title' === $key) {
+			$updated_columns['item_sort_date'] = __('Sort Date', 'twentytwentyfive-child');
+			$updated_columns['item_date_display'] = __('Display Date', 'twentytwentyfive-child');
+		}
+	}
+
+	return $updated_columns;
+}
+add_filter('manage_edit-collection_item_columns', 'wj_collection_item_admin_columns');
+
+function wj_render_collection_item_admin_column(string $column, int $post_id): void {
+	if ('item_sort_date' === $column) {
+		$value = get_post_meta($post_id, 'item_sort_date', true);
+		echo esc_html($value ?: '-');
+		return;
+	}
+
+	if ('item_date_display' === $column) {
+		$value = get_post_meta($post_id, 'item_date_display', true);
+		echo esc_html($value ?: '-');
+	}
+}
+add_action('manage_collection_item_posts_custom_column', 'wj_render_collection_item_admin_column', 10, 2);
+
+function wj_collection_item_sortable_columns(array $columns): array {
+	$columns['item_sort_date'] = 'item_sort_date';
+	$columns['item_date_display'] = 'item_sort_date';
+	return $columns;
+}
+add_filter('manage_edit-collection_item_sortable_columns', 'wj_collection_item_sortable_columns');
+
+function wj_default_collection_item_admin_sort(WP_Query $query): void {
+	if (!is_admin() || !$query->is_main_query()) {
+		return;
+	}
+
+	if ('collection_item' !== $query->get('post_type')) {
+		return;
+	}
+
+	$orderby = $query->get('orderby');
+
+	if (!$orderby) {
+		$query->set('meta_key', 'item_sort_date');
+		$query->set('orderby', 'meta_value');
+		$query->set('order', 'DESC');
+		return;
+	}
+
+	if (in_array($orderby, ['item_date_display', 'item_sort_date'], true)) {
+		$query->set('meta_key', 'item_sort_date');
+		$query->set('orderby', 'meta_value');
+	}
+}
+add_action('pre_get_posts', 'wj_default_collection_item_admin_sort');
 
 function wj_add_artist_term_fields(): void {
 	?>

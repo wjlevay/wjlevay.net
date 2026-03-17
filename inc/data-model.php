@@ -9,6 +9,7 @@ if (!defined('ABSPATH')) {
 
 const WJ_ITEM_META = [
 	'item_identifier'   => 'string',
+	'item_sort_date'    => 'string',
 	'item_year'         => 'integer',
 	'item_date_display' => 'string',
 	'item_condition'    => 'string',
@@ -27,13 +28,17 @@ const WJ_ITEM_META_UI = [
 		'label'       => 'Identifier',
 		'description' => 'Local identifier or source-system ID.',
 	],
+	'item_sort_date'    => [
+		'label'       => 'Sort Date',
+		'description' => 'Machine-readable date used for sorting, in YYYY-MM-DD format.',
+	],
 	'item_year'         => [
 		'label'       => 'Year',
-		'description' => 'Primary sortable year for the item.',
+		'description' => 'Derived year used for quick filtering and card metadata.',
 	],
 	'item_date_display' => [
 		'label'       => 'Display Date',
-		'description' => 'Human-readable date such as 1994 or 1994-03-08.',
+		'description' => 'Human-readable date shown on the front end, such as circa 1994 or March 8, 2019.',
 	],
 	'item_condition'    => [
 		'label'       => 'Condition',
@@ -72,6 +77,57 @@ const WJ_ITEM_META_UI = [
 		'description' => 'Original Dropbox path for ingest tracking.',
 	],
 ];
+
+const WJ_ITEM_DATE_SCHEMA_VERSION = 2;
+
+function wj_normalize_sort_date(string $raw): string {
+	$value = trim($raw);
+
+	if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $value)) {
+		return $value;
+	}
+
+	if (preg_match('/^(\d{4})-(\d{2})$/', $value, $matches)) {
+		return $matches[1] . '-' . $matches[2] . '-01';
+	}
+
+	if (preg_match('/^(\d{4})$/', $value, $matches)) {
+		return $matches[1] . '-01-01';
+	}
+
+	return '';
+}
+
+function wj_get_sort_date_year(string $sort_date): int {
+	if (preg_match('/^(\d{4})-\d{2}-\d{2}$/', $sort_date, $matches)) {
+		return (int) $matches[1];
+	}
+
+	return 0;
+}
+
+function wj_derive_sort_date(string $display_date = '', $year = ''): string {
+	$display_date = trim((string) $display_date);
+	$year = trim((string) $year);
+
+	if ($display_date && preg_match('/(\d{4}-\d{2}-\d{2})/', $display_date, $matches)) {
+		return wj_normalize_sort_date($matches[1]);
+	}
+
+	if ($display_date && preg_match('/(\d{4}-\d{2})/', $display_date, $matches)) {
+		return wj_normalize_sort_date($matches[1]);
+	}
+
+	if ($display_date && preg_match('/(\d{4})/', $display_date, $matches)) {
+		return wj_normalize_sort_date($matches[1]);
+	}
+
+	if ($year) {
+		return wj_normalize_sort_date($year);
+	}
+
+	return '';
+}
 
 function wj_register_content_model(): void {
 	register_post_type(
@@ -174,6 +230,51 @@ function wj_seed_collection_terms(): void {
 }
 add_action('init', 'wj_seed_collection_terms', 20);
 
+function wj_backfill_item_date_schema(): void {
+	$stored_version = (int) get_option('wj_item_date_schema_version', 0);
+	if ($stored_version >= WJ_ITEM_DATE_SCHEMA_VERSION) {
+		return;
+	}
+
+	$post_ids = get_posts(
+		[
+			'post_type'      => 'collection_item',
+			'post_status'    => 'any',
+			'posts_per_page' => -1,
+			'fields'         => 'ids',
+		]
+	);
+
+	foreach ($post_ids as $post_id) {
+		$sort_date = (string) get_post_meta($post_id, 'item_sort_date', true);
+		$display_date = (string) get_post_meta($post_id, 'item_date_display', true);
+		$item_year = (string) get_post_meta($post_id, 'item_year', true);
+
+		if (!$sort_date) {
+			$sort_date = wj_derive_sort_date($display_date, $item_year);
+			if ($sort_date) {
+				update_post_meta($post_id, 'item_sort_date', $sort_date);
+			}
+		} else {
+			$normalized = wj_normalize_sort_date($sort_date);
+			if ($normalized && $normalized !== $sort_date) {
+				$sort_date = $normalized;
+				update_post_meta($post_id, 'item_sort_date', $sort_date);
+			}
+		}
+
+		if ($sort_date) {
+			$derived_year = wj_get_sort_date_year($sort_date);
+			if ($derived_year && (int) $item_year !== $derived_year) {
+				update_post_meta($post_id, 'item_year', $derived_year);
+			}
+		}
+	}
+
+	update_option('wj_item_date_schema_version', WJ_ITEM_DATE_SCHEMA_VERSION, false);
+}
+add_action('init', 'wj_backfill_item_date_schema', 30);
+
 function wj_get_filter_values(): array {
 	$item_year = 0;
 	if (isset($_GET['item_year'])) {
@@ -190,7 +291,7 @@ function wj_get_filter_values(): array {
 		'item_tag'   => isset($_GET['item_tag']) ? sanitize_title(wp_unslash($_GET['item_tag'])) : '',
 		'year'       => $item_year,
 		'collection' => isset($_GET['collection']) ? sanitize_title(wp_unslash($_GET['collection'])) : '',
-		'sort'       => isset($_GET['sort']) ? sanitize_key(wp_unslash($_GET['sort'])) : 'year_desc',
+		'sort'       => isset($_GET['sort']) ? sanitize_key(wp_unslash($_GET['sort'])) : 'date_desc',
 	];
 }
 
@@ -264,8 +365,9 @@ function wj_filter_collection_queries(WP_Query $query): void {
 			$query->set('order', 'DESC');
 			break;
 		case 'year_asc':
-			$query->set('meta_key', 'item_year');
-			$query->set('orderby', 'meta_value_num');
+		case 'date_asc':
+			$query->set('meta_key', 'item_sort_date');
+			$query->set('orderby', 'meta_value');
 			$query->set('order', 'ASC');
 			break;
 		case 'recent':
@@ -273,8 +375,8 @@ function wj_filter_collection_queries(WP_Query $query): void {
 			$query->set('order', 'DESC');
 			break;
 		default:
-			$query->set('meta_key', 'item_year');
-			$query->set('orderby', 'meta_value_num');
+			$query->set('meta_key', 'item_sort_date');
+			$query->set('orderby', 'meta_value');
 			$query->set('order', 'DESC');
 	}
 }

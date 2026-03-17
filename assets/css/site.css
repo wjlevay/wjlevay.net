@@ -209,16 +209,60 @@
 
 .wj-filter-bar {
 	display: grid;
-	grid-template-columns: repeat(6, minmax(150px, 1fr));
+	grid-template-columns: repeat(6, minmax(0, 1fr));
 	align-items: end;
 	gap: 0.9rem;
 	padding: 1.25rem;
+	margin: 0;
+	max-width: 1400px;
+	border-top: 1px solid rgba(20, 19, 17, 0.08);
+	background: rgba(255, 255, 255, 0.9);
+	box-shadow: none;
+}
+
+.wj-filter-panel {
 	margin: 0 0 2.4rem;
 	max-width: 1400px;
 	border: 1px solid rgba(20, 19, 17, 0.08);
 	border-radius: 1.5rem;
 	background: rgba(255, 255, 255, 0.9);
 	box-shadow: none;
+	overflow: hidden;
+}
+
+.wj-filter-toggle {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 1rem;
+	padding: 1rem 1.25rem;
+	cursor: pointer;
+	list-style: none;
+	font-size: 0.92rem;
+	font-weight: 600;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	color: var(--wj-ink);
+}
+
+.wj-filter-toggle::-webkit-details-marker {
+	display: none;
+}
+
+.wj-filter-toggle::after {
+	content: "+";
+	flex: 0 0 auto;
+	font-size: 1.2rem;
+	font-weight: 400;
+	line-height: 1;
+}
+
+.wj-filter-panel[open] .wj-filter-toggle::after {
+	content: "−";
+}
+
+.wj-filter-panel:not([open]) .wj-filter-bar {
+	display: none;
 }
 
 .wj-filter-bar > * {
@@ -246,6 +290,7 @@
 .wj-filter-bar input,
 .wj-filter-bar select {
 	box-sizing: border-box;
+	width: 100%;
 	min-height: 52px;
 	height: 52px;
 	padding: 0.85rem 0.95rem;
@@ -957,9 +1002,27 @@
 	border-radius: 0.9rem;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 1500px) {
+	.wj-filter-bar {
+		grid-template-columns: repeat(4, minmax(0, 1fr));
+	}
+}
+
+@media (max-width: 1180px) {
 	.wj-filter-bar {
 		grid-template-columns: repeat(3, minmax(0, 1fr));
+	}
+}
+
+@media (max-width: 900px) {
+	.wj-filter-bar {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+
+	.wj-filter-toggle,
+	.wj-filter-bar {
+		padding-left: 1rem;
+		padding-right: 1rem;
 	}
 
 	.wj-single-layout,
@@ -988,11 +1051,6 @@
 	.wj-single-shell {
 		padding-top: 1.4rem;
 		padding-bottom: 3rem;
-	}
-
-	.wj-filter-bar {
-		grid-template-columns: repeat(2, minmax(0, 1fr));
-		padding: 1rem;
 	}
 
 	.wj-filter-actions {

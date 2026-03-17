@@ -41,10 +41,12 @@ Item metadata fields:
 
 - `item_identifier`
   Local ID or source-system identifier
+- `item_sort_date`
+  Machine-readable date in `YYYY-MM-DD` format used for sorting
 - `item_year`
-  Integer year used for sorting/filtering
+  Integer year derived from `item_sort_date` and used for filtering/card metadata
 - `item_date_display`
-  Human-readable date string
+  Human-readable date string shown on the front end
 - `item_condition`
 - `item_materials`
 - `item_dimensions`
@@ -77,6 +79,7 @@ Expected CSV columns:
 - `location`
 - `subjects`
 - `item_identifier`
+- `item_sort_date`
 - `item_year`
 - `item_date_display`
 - `item_condition`
@@ -112,7 +115,8 @@ Current Omeka mapping:
 - `Dublin Core:Title` -> `title`
 - `Dublin Core:Description` -> `content`
 - `Dublin Core:Date` -> `item_date_display`
-- year from `Dublin Core:Date` -> `item_year`
+- normalized date from `Dublin Core:Date` -> `item_sort_date`
+- year derived from `item_sort_date` -> `item_year`
 - `Dublin Core:Coverage` -> `venue` + `location`
 - `tags` -> `subjects`
 - `collection` -> `collection`
@@ -134,7 +138,8 @@ Mapping rules:
 - `ticket_venue` maps to `venue`
 - `ticket_location` maps to `location`
 - `ticket_date` maps to `item_date_display`
-- `shirt_year` maps to `item_year`
+- `ticket_date` also derives `item_sort_date`
+- `shirt_year` derives `item_sort_date` and `item_year`
 - old `gallery_ids` maps to `item_gallery_ids`
 - featured images are retained
 - legacy source post ID/type are stored in `_wj_legacy_post_id` and `_wj_legacy_post_type`

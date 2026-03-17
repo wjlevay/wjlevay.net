@@ -95,6 +95,26 @@ function wj_should_render_filter(string $taxonomy): bool {
 	return !is_tax($taxonomy);
 }
 
+function wj_filter_panel_should_open(array $filters): bool {
+	$active_keys = [
+		'search',
+		'artist',
+		'collection',
+		'venue',
+		'location',
+		'item_tag',
+		'year',
+	];
+
+	foreach ($active_keys as $key) {
+		if (!empty($filters[$key])) {
+			return true;
+		}
+	}
+
+	return !empty($filters['sort']) && 'date_desc' !== $filters['sort'];
+}
+
 function wj_render_item_browser(): string {
 	$filters = wj_get_filter_values();
 	$action = '';
@@ -112,75 +132,80 @@ function wj_render_item_browser(): string {
 
 	ob_start();
 	?>
-	<form class="wj-filter-bar" method="get" action="<?php echo esc_url($action); ?>">
-		<label>
-			<span><?php esc_html_e('Search', 'twentytwentyfive-child'); ?></span>
-			<input type="search" name="s" value="<?php echo esc_attr($filters['search']); ?>" placeholder="<?php esc_attr_e('Band, tour, city, design...', 'twentytwentyfive-child'); ?>">
-		</label>
-		<?php if (wj_should_render_filter('artist')) : ?>
+	<details class="wj-filter-panel" <?php echo wj_filter_panel_should_open($filters) ? 'open' : ''; ?>>
+		<summary class="wj-filter-toggle">
+			<span><?php esc_html_e('Filter and sort', 'twentytwentyfive-child'); ?></span>
+		</summary>
+		<form class="wj-filter-bar" method="get" action="<?php echo esc_url($action); ?>">
 			<label>
-				<span><?php esc_html_e('Artist', 'twentytwentyfive-child'); ?></span>
-				<select name="artist">
-					<option value=""><?php esc_html_e('All artists', 'twentytwentyfive-child'); ?></option>
-					<?php foreach (wj_get_filter_term_options('artist') as $term) : ?>
-						<option value="<?php echo esc_attr($term->slug); ?>" <?php selected($filters['artist'], $term->slug); ?>><?php echo esc_html($term->name); ?></option>
-					<?php endforeach; ?>
+				<span><?php esc_html_e('Search', 'twentytwentyfive-child'); ?></span>
+				<input type="search" name="s" value="<?php echo esc_attr($filters['search']); ?>" placeholder="<?php esc_attr_e('Band, tour, city, design...', 'twentytwentyfive-child'); ?>">
+			</label>
+			<?php if (wj_should_render_filter('artist')) : ?>
+				<label>
+					<span><?php esc_html_e('Artist', 'twentytwentyfive-child'); ?></span>
+					<select name="artist">
+						<option value=""><?php esc_html_e('All artists', 'twentytwentyfive-child'); ?></option>
+						<?php foreach (wj_get_filter_term_options('artist') as $term) : ?>
+							<option value="<?php echo esc_attr($term->slug); ?>" <?php selected($filters['artist'], $term->slug); ?>><?php echo esc_html($term->name); ?></option>
+						<?php endforeach; ?>
+					</select>
+				</label>
+			<?php endif; ?>
+			<?php echo wj_render_collection_filter_select($filters); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+			<?php if (wj_should_render_filter('venue')) : ?>
+				<label>
+					<span><?php esc_html_e('Venue', 'twentytwentyfive-child'); ?></span>
+					<select name="venue">
+						<option value=""><?php esc_html_e('All venues', 'twentytwentyfive-child'); ?></option>
+						<?php foreach (wj_get_filter_term_options('venue') as $term) : ?>
+							<option value="<?php echo esc_attr($term->slug); ?>" <?php selected($filters['venue'], $term->slug); ?>><?php echo esc_html($term->name); ?></option>
+						<?php endforeach; ?>
+					</select>
+				</label>
+			<?php endif; ?>
+			<?php if (wj_should_render_filter('location')) : ?>
+				<label>
+					<span><?php esc_html_e('Location', 'twentytwentyfive-child'); ?></span>
+					<select name="location">
+						<option value=""><?php esc_html_e('All locations', 'twentytwentyfive-child'); ?></option>
+						<?php foreach (wj_get_filter_term_options('location') as $term) : ?>
+							<option value="<?php echo esc_attr($term->slug); ?>" <?php selected($filters['location'], $term->slug); ?>><?php echo esc_html($term->name); ?></option>
+						<?php endforeach; ?>
+					</select>
+				</label>
+			<?php endif; ?>
+			<?php if (wj_should_render_filter('item_tag')) : ?>
+				<label>
+					<span><?php esc_html_e('Subject', 'twentytwentyfive-child'); ?></span>
+					<select name="item_tag">
+						<option value=""><?php esc_html_e('All subjects', 'twentytwentyfive-child'); ?></option>
+						<?php foreach (wj_get_filter_term_options('item_tag') as $term) : ?>
+							<option value="<?php echo esc_attr($term->slug); ?>" <?php selected($filters['item_tag'], $term->slug); ?>><?php echo esc_html($term->name); ?></option>
+						<?php endforeach; ?>
+					</select>
+				</label>
+			<?php endif; ?>
+			<label>
+				<span><?php esc_html_e('Year', 'twentytwentyfive-child'); ?></span>
+				<input type="number" min="1900" max="<?php echo esc_attr((string) ((int) gmdate('Y') + 5)); ?>" name="item_year" value="<?php echo esc_attr($filters['year'] ?: ''); ?>" placeholder="1994">
+			</label>
+			<label>
+				<span><?php esc_html_e('Sort', 'twentytwentyfive-child'); ?></span>
+				<select name="sort">
+					<option value="date_desc" <?php selected($filters['sort'], 'date_desc'); ?>><?php esc_html_e('Date, newest first', 'twentytwentyfive-child'); ?></option>
+					<option value="date_asc" <?php selected($filters['sort'], 'date_asc'); ?>><?php esc_html_e('Date, oldest first', 'twentytwentyfive-child'); ?></option>
+					<option value="title_asc" <?php selected($filters['sort'], 'title_asc'); ?>><?php esc_html_e('Title A-Z', 'twentytwentyfive-child'); ?></option>
+					<option value="title_desc" <?php selected($filters['sort'], 'title_desc'); ?>><?php esc_html_e('Title Z-A', 'twentytwentyfive-child'); ?></option>
+					<option value="recent" <?php selected($filters['sort'], 'recent'); ?>><?php esc_html_e('Recently added', 'twentytwentyfive-child'); ?></option>
 				</select>
 			</label>
-		<?php endif; ?>
-		<?php echo wj_render_collection_filter_select($filters); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
-		<?php if (wj_should_render_filter('venue')) : ?>
-			<label>
-				<span><?php esc_html_e('Venue', 'twentytwentyfive-child'); ?></span>
-				<select name="venue">
-					<option value=""><?php esc_html_e('All venues', 'twentytwentyfive-child'); ?></option>
-					<?php foreach (wj_get_filter_term_options('venue') as $term) : ?>
-						<option value="<?php echo esc_attr($term->slug); ?>" <?php selected($filters['venue'], $term->slug); ?>><?php echo esc_html($term->name); ?></option>
-					<?php endforeach; ?>
-				</select>
-			</label>
-		<?php endif; ?>
-		<?php if (wj_should_render_filter('location')) : ?>
-			<label>
-				<span><?php esc_html_e('Location', 'twentytwentyfive-child'); ?></span>
-				<select name="location">
-					<option value=""><?php esc_html_e('All locations', 'twentytwentyfive-child'); ?></option>
-					<?php foreach (wj_get_filter_term_options('location') as $term) : ?>
-						<option value="<?php echo esc_attr($term->slug); ?>" <?php selected($filters['location'], $term->slug); ?>><?php echo esc_html($term->name); ?></option>
-					<?php endforeach; ?>
-				</select>
-			</label>
-		<?php endif; ?>
-		<?php if (wj_should_render_filter('item_tag')) : ?>
-			<label>
-				<span><?php esc_html_e('Subject', 'twentytwentyfive-child'); ?></span>
-				<select name="item_tag">
-					<option value=""><?php esc_html_e('All subjects', 'twentytwentyfive-child'); ?></option>
-					<?php foreach (wj_get_filter_term_options('item_tag') as $term) : ?>
-						<option value="<?php echo esc_attr($term->slug); ?>" <?php selected($filters['item_tag'], $term->slug); ?>><?php echo esc_html($term->name); ?></option>
-					<?php endforeach; ?>
-				</select>
-			</label>
-		<?php endif; ?>
-		<label>
-			<span><?php esc_html_e('Year', 'twentytwentyfive-child'); ?></span>
-			<input type="number" min="1900" max="<?php echo esc_attr((string) ((int) gmdate('Y') + 5)); ?>" name="item_year" value="<?php echo esc_attr($filters['year'] ?: ''); ?>" placeholder="1994">
-		</label>
-		<label>
-			<span><?php esc_html_e('Sort', 'twentytwentyfive-child'); ?></span>
-			<select name="sort">
-				<option value="year_desc" <?php selected($filters['sort'], 'year_desc'); ?>><?php esc_html_e('Year, newest first', 'twentytwentyfive-child'); ?></option>
-				<option value="year_asc" <?php selected($filters['sort'], 'year_asc'); ?>><?php esc_html_e('Year, oldest first', 'twentytwentyfive-child'); ?></option>
-				<option value="title_asc" <?php selected($filters['sort'], 'title_asc'); ?>><?php esc_html_e('Title A-Z', 'twentytwentyfive-child'); ?></option>
-				<option value="title_desc" <?php selected($filters['sort'], 'title_desc'); ?>><?php esc_html_e('Title Z-A', 'twentytwentyfive-child'); ?></option>
-				<option value="recent" <?php selected($filters['sort'], 'recent'); ?>><?php esc_html_e('Recently added', 'twentytwentyfive-child'); ?></option>
-			</select>
-		</label>
-		<div class="wj-filter-actions">
-			<button class="wj-filter-submit" type="submit"><?php esc_html_e('Apply Filters', 'twentytwentyfive-child'); ?></button>
-			<a class="wj-filter-reset" href="<?php echo esc_url($action); ?>"><?php esc_html_e('Reset', 'twentytwentyfive-child'); ?></a>
-		</div>
-	</form>
+			<div class="wj-filter-actions">
+				<button class="wj-filter-submit" type="submit"><?php esc_html_e('Apply Filters', 'twentytwentyfive-child'); ?></button>
+				<a class="wj-filter-reset" href="<?php echo esc_url($action); ?>"><?php esc_html_e('Reset', 'twentytwentyfive-child'); ?></a>
+			</div>
+		</form>
+	</details>
 	<?php
 
 	return (string) ob_get_clean();
@@ -252,6 +277,8 @@ function wj_render_linked_term_list(int $post_id, string $taxonomy, string $labe
 
 function wj_render_item_meta(): string {
 	$post_id = get_the_ID();
+	$display_date = (string) get_post_meta($post_id, 'item_date_display', true);
+	$sort_date = (string) get_post_meta($post_id, 'item_sort_date', true);
 	$fields = [
 		'item_identifier'   => __('Identifier', 'twentytwentyfive-child'),
 		'item_date_display' => __('Date', 'twentytwentyfive-child'),
@@ -265,7 +292,7 @@ function wj_render_item_meta(): string {
 
 	$lines = [];
 	foreach ($fields as $meta_key => $label) {
-		$value = get_post_meta($post_id, $meta_key, true);
+		$value = 'item_date_display' === $meta_key ? ($display_date ?: $sort_date) : get_post_meta($post_id, $meta_key, true);
 		if ('' === $value || null === $value) {
 			continue;
 		}

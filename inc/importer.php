@@ -22,6 +22,7 @@ if (defined('WP_CLI') && WP_CLI) {
 			'location',
 			'subjects',
 			'item_identifier',
+			'item_sort_date',
 			'item_year',
 			'item_date_display',
 			'item_condition',
@@ -241,6 +242,7 @@ if (defined('WP_CLI') && WP_CLI) {
 						'',
 						'tour merch|screenprint',
 						'shirt-0001',
+						'1994-01-01',
 						'1994',
 						'1994',
 						'Very good',
@@ -386,6 +388,21 @@ if (defined('WP_CLI') && WP_CLI) {
 				update_post_meta($post_id, $meta_key, wj_sanitize_meta_input($meta_key, $data[$meta_key], WJ_ITEM_META[$meta_key]));
 			}
 
+			$sort_date = (string) get_post_meta($post_id, 'item_sort_date', true);
+			$display_date = (string) get_post_meta($post_id, 'item_date_display', true);
+			$item_year = (string) get_post_meta($post_id, 'item_year', true);
+
+			if (!$sort_date) {
+				$sort_date = wj_derive_sort_date($display_date, $item_year);
+				if ($sort_date) {
+					update_post_meta($post_id, 'item_sort_date', $sort_date);
+				}
+			}
+
+			if ($sort_date) {
+				update_post_meta($post_id, 'item_year', wj_get_sort_date_year($sort_date));
+			}
+
 			if (!empty($data['source_uri'])) {
 				update_post_meta($post_id, '_wj_source_uri', esc_url_raw((string) $data['source_uri']));
 			}
@@ -426,6 +443,7 @@ if (defined('WP_CLI') && WP_CLI) {
 				'location'         => '',
 				'subjects'         => implode('|', $tags ?: []),
 				'item_identifier'  => (string) $legacy_post->ID,
+				'item_sort_date'   => '',
 				'item_year'        => '',
 				'item_date_display'=> '',
 				'item_condition'   => '',
@@ -445,11 +463,13 @@ if (defined('WP_CLI') && WP_CLI) {
 				$mapped['venue'] = get_post_meta($legacy_post->ID, 'ticket_venue', true);
 				$mapped['location'] = get_post_meta($legacy_post->ID, 'ticket_location', true);
 				$mapped['item_date_display'] = get_post_meta($legacy_post->ID, 'ticket_date', true);
-				$mapped['item_year'] = substr((string) $mapped['item_date_display'], 0, 4);
+				$mapped['item_sort_date'] = wj_derive_sort_date($mapped['item_date_display']);
+				$mapped['item_year'] = $mapped['item_sort_date'] ? (string) wj_get_sort_date_year($mapped['item_sort_date']) : '';
 			}
 
 			if ('t_shirt' === $legacy_post->post_type) {
-				$mapped['item_year'] = get_post_meta($legacy_post->ID, 'shirt_year', true);
+				$mapped['item_sort_date'] = wj_derive_sort_date('', (string) get_post_meta($legacy_post->ID, 'shirt_year', true));
+				$mapped['item_year'] = $mapped['item_sort_date'] ? (string) wj_get_sort_date_year($mapped['item_sort_date']) : '';
 				$color = get_post_meta($legacy_post->ID, 'shirt_color', true);
 				if ($color) {
 					$subjects = array_filter(explode('|', $mapped['subjects']));
@@ -482,6 +502,7 @@ if (defined('WP_CLI') && WP_CLI) {
 				'location'          => $location,
 				'subjects'          => $this->normalize_delimited_terms((string) ($raw['tags'] ?? ''), ','),
 				'item_identifier'   => $item_id,
+				'item_sort_date'    => wj_derive_sort_date($date),
 				'item_year'         => preg_match('/^\d{4}/', $date, $matches) ? $matches[0] : '',
 				'item_date_display' => $date,
 				'item_condition'    => '',
