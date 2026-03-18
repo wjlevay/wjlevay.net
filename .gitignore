@@ -8,3 +8,7 @@ Thumbs.db
 .vscode/
 node_modules/
 vendor/
+staging/
+.env
+__pycache__/
+*.pyc

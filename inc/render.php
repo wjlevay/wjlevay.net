@@ -17,14 +17,123 @@ function wj_register_shortcodes(): void {
 }
 add_action('init', 'wj_register_shortcodes');
 
+function wj_get_collections_page_url(): string {
+	$page = get_page_by_path('collections');
+	if ($page instanceof WP_Post) {
+		$url = get_permalink($page);
+		if ($url) {
+			return $url;
+		}
+	}
+
+	return home_url('/collections/');
+}
+
+function wj_render_breadcrumbs(array $crumbs): string {
+	$parts = [];
+
+	foreach ($crumbs as $crumb) {
+		$label = trim((string) ($crumb['label'] ?? ''));
+		if ('' === $label) {
+			continue;
+		}
+
+		$url = trim((string) ($crumb['url'] ?? ''));
+		if ('' !== $url) {
+			$parts[] = sprintf('<a href="%s">%s</a>', esc_url($url), esc_html($label));
+			continue;
+		}
+
+		$parts[] = sprintf('<span aria-current="page">%s</span>', esc_html($label));
+	}
+
+	if (!$parts) {
+		return '';
+	}
+
+	return '<nav class="wj-breadcrumbs" aria-label="' . esc_attr__('Breadcrumb', 'twentytwentyfive-child') . '">' . implode('<span class="wj-breadcrumbs__sep" aria-hidden="true">/</span>', $parts) . '</nav>';
+}
+
+function wj_get_single_item_breadcrumbs(int $post_id): string {
+	$crumbs = [
+		[
+			'label' => __('All Collections', 'twentytwentyfive-child'),
+			'url'   => wj_get_collections_page_url(),
+		],
+	];
+
+	$collections = get_the_terms($post_id, 'collection');
+	if ($collections && !is_wp_error($collections)) {
+		$collection = $collections[0];
+		$link = get_term_link($collection);
+		$crumbs[] = [
+			'label' => $collection->name,
+			'url'   => is_wp_error($link) ? '' : $link,
+		];
+	}
+
+	return wj_render_breadcrumbs($crumbs);
+}
+
+function wj_get_taxonomy_breadcrumbs(WP_Term $term): string {
+	$crumbs = [];
+
+	if ('collection' === $term->taxonomy) {
+		$crumbs[] = [
+			'label' => __('All Collections', 'twentytwentyfive-child'),
+			'url'   => wj_get_collections_page_url(),
+		];
+		$crumbs[] = [
+			'label' => $term->name,
+			'url'   => '',
+		];
+
+		return wj_render_breadcrumbs($crumbs);
+	}
+
+	$active_collection = get_query_var('collection');
+	if (is_string($active_collection) && '' !== $active_collection) {
+		$collection = get_term_by('slug', sanitize_title($active_collection), 'collection');
+		if ($collection instanceof WP_Term) {
+			$link = get_term_link($collection);
+			$crumbs[] = [
+				'label' => __('All Collections', 'twentytwentyfive-child'),
+				'url'   => wj_get_collections_page_url(),
+			];
+			$crumbs[] = [
+				'label' => $collection->name,
+				'url'   => is_wp_error($link) ? '' : $link,
+			];
+			$crumbs[] = [
+				'label' => $term->name,
+				'url'   => '',
+			];
+
+			return wj_render_breadcrumbs($crumbs);
+		}
+	}
+
+	$archive_link = get_post_type_archive_link('collection_item');
+	$crumbs[] = [
+		'label' => __('Items', 'twentytwentyfive-child'),
+		'url'   => $archive_link ?: '',
+	];
+	$crumbs[] = [
+		'label' => $term->name,
+		'url'   => '',
+	];
+
+	return wj_render_breadcrumbs($crumbs);
+}
+
 function wj_render_collections_index(): string {
 	$terms = get_terms(
 		[
 			'taxonomy'   => 'collection',
 			'hide_empty' => false,
 			'parent'     => 0,
-			'orderby'    => 'name',
-			'order'      => 'ASC',
+			'orderby'    => 'count',
+			'order'      => 'DESC',
 		]
 	);
 
@@ -43,7 +152,10 @@ function wj_render_collections_index(): string {
 			<article class="wj-collection-card">
 				<p class="wj-eyebrow"><?php esc_html_e('Collection', 'twentytwentyfive-child'); ?></p>
 				<h2><a href="<?php echo esc_url($link); ?>"><?php echo esc_html($term->name); ?></a></h2>
-				<p class="wj-card-meta"><?php echo esc_html(sprintf(_n('%d item', '%d items', $count, 'twentytwentyfive-child'), $count)); ?></p>
+				<p class="wj-card-meta">
+					<span class="wj-card-meta__count"><?php echo esc_html((string) $count); ?></span>
+					<span class="wj-card-meta__label"><?php echo esc_html(_n('item', 'items', $count, 'twentytwentyfive-child')); ?></span>
+				</p>
 			</article>
 		<?php endforeach; ?>
 	</div>
@@ -98,7 +210,8 @@ function wj_should_render_filter(string $taxonomy): bool {
 function wj_filter_panel_should_open(array $filters): bool {
 	$active_keys = [
 		'search',
-		'artist',
+		'agent',
+		'production',
 		'collection',
 		'venue',
 		'location',
@@ -141,13 +254,24 @@ function wj_render_item_browser(): string {
 				<span><?php esc_html_e('Search', 'twentytwentyfive-child'); ?></span>
 				<input type="search" name="s" value="<?php echo esc_attr($filters['search']); ?>" placeholder="<?php esc_attr_e('Band, tour, city, design...', 'twentytwentyfive-child'); ?>">
 			</label>
-			<?php if (wj_should_render_filter('artist')) : ?>
+			<?php if (wj_should_render_filter('agent')) : ?>
 				<label>
-					<span><?php esc_html_e('Artist', 'twentytwentyfive-child'); ?></span>
-					<select name="artist">
-						<option value=""><?php esc_html_e('All artists', 'twentytwentyfive-child'); ?></option>
-						<?php foreach (wj_get_filter_term_options('artist') as $term) : ?>
-							<option value="<?php echo esc_attr($term->slug); ?>" <?php selected($filters['artist'], $term->slug); ?>><?php echo esc_html($term->name); ?></option>
+					<span><?php esc_html_e('Agent', 'twentytwentyfive-child'); ?></span>
+					<select name="agent">
+						<option value=""><?php esc_html_e('All agents', 'twentytwentyfive-child'); ?></option>
+						<?php foreach (wj_get_filter_term_options('agent') as $term) : ?>
+							<option value="<?php echo esc_attr($term->slug); ?>" <?php selected($filters['agent'], $term->slug); ?>><?php echo esc_html($term->name); ?></option>
+						<?php endforeach; ?>
+					</select>
+				</label>
+			<?php endif; ?>
+			<?php if (wj_should_render_filter('production')) : ?>
+				<label>
+					<span><?php esc_html_e('Production', 'twentytwentyfive-child'); ?></span>
+					<select name="production">
+						<option value=""><?php esc_html_e('All productions', 'twentytwentyfive-child'); ?></option>
+						<?php foreach (wj_get_filter_term_options('production') as $term) : ?>
+							<option value="<?php echo esc_attr($term->slug); ?>" <?php selected($filters['production'], $term->slug); ?>><?php echo esc_html($term->name); ?></option>
 						<?php endforeach; ?>
 					</select>
 				</label>
@@ -214,8 +338,7 @@ function wj_render_item_browser(): string {
 function wj_render_item_card_meta(): string {
 	$post_id = get_the_ID();
 	$year = (int) get_post_meta($post_id, 'item_year', true);
-	$collections = get_the_terms($post_id, 'collection');
-	$artists = get_the_terms($post_id, 'artist');
+	$locations = get_the_terms($post_id, 'location');
 
 	ob_start();
 	?>
@@ -223,11 +346,8 @@ function wj_render_item_card_meta(): string {
 		<?php if ($year) : ?>
 			<li><?php echo esc_html((string) $year); ?></li>
 		<?php endif; ?>
-		<?php if ($collections && !is_wp_error($collections)) : ?>
-			<li><?php echo esc_html($collections[0]->name); ?></li>
-		<?php endif; ?>
-		<?php if ($artists && !is_wp_error($artists)) : ?>
-			<li><?php echo esc_html($artists[0]->name); ?></li>
+		<?php if ($locations && !is_wp_error($locations)) : ?>
+			<li><?php echo esc_html($locations[0]->name); ?></li>
 		<?php endif; ?>
 	</ul>
 	<?php
@@ -275,6 +395,37 @@ function wj_render_linked_term_list(int $post_id, string $taxonomy, string $labe
 	return sprintf('<li><span>%s</span><div>%s</div></li>', esc_html($label), wp_kses_post(implode(', ', $links)));
 }
 
+function wj_render_agent_term_list(int $post_id): string {
+	$terms = get_the_terms($post_id, 'agent');
+	if (!$terms || is_wp_error($terms)) {
+		return '';
+	}
+
+	$items = [];
+	foreach ($terms as $term) {
+		$agent_link = get_term_link($term);
+		$filter_link = wj_get_prefiltered_term_link($term, $post_id);
+		if (is_wp_error($agent_link) || is_wp_error($filter_link)) {
+			continue;
+		}
+
+		$items[] = sprintf(
+			'<div class="wj-agent-chip"><a class="wj-agent-chip__primary" href="%1$s">%2$s<span>%3$s</span></a><a class="wj-agent-chip__secondary" href="%4$s">%5$s</a></div>',
+			esc_url($agent_link),
+			wj_get_term_avatar_markup($term, 'wj-agent-avatar'),
+			esc_html($term->name),
+			esc_url($filter_link),
+			esc_html__('Filter in collection', 'twentytwentyfive-child')
+		);
+	}
+
+	if (!$items) {
+		return '';
+	}
+
+	return sprintf('<li><span>%s</span><div class="wj-agent-chip-list">%s</div></li>', esc_html__('Agent', 'twentytwentyfive-child'), wp_kses_post(implode('', $items)));
+}
+
 function wj_render_item_meta(): string {
 	$post_id = get_the_ID();
 	$display_date = (string) get_post_meta($post_id, 'item_date_display', true);
@@ -282,12 +433,11 @@ function wj_render_item_meta(): string {
 	$fields = [
 		'item_identifier'   => __('Identifier', 'twentytwentyfive-child'),
 		'item_date_display' => __('Date', 'twentytwentyfive-child'),
-		'item_condition'    => __('Condition', 'twentytwentyfive-child'),
+		'item_inscription'  => __('Inscription / Notes', 'twentytwentyfive-child'),
 		'item_materials'    => __('Materials', 'twentytwentyfive-child'),
 		'item_dimensions'   => __('Dimensions', 'twentytwentyfive-child'),
-		'item_inscription'  => __('Inscription / Notes', 'twentytwentyfive-child'),
+		'item_condition'    => __('Condition', 'twentytwentyfive-child'),
 		'item_rights'       => __('Rights', 'twentytwentyfive-child'),
-		'item_event_link'   => __('Event Link', 'twentytwentyfive-child'),
 	];
 
 	$lines = [];
@@ -314,36 +464,26 @@ function wj_render_item_meta(): string {
 		);
 	}
 
-	$lines[] = wj_render_linked_term_list($post_id, 'collection', __('Collection', 'twentytwentyfive-child'));
-	$lines[] = wj_render_linked_term_list($post_id, 'artist', __('Artist', 'twentytwentyfive-child'));
+	$lines[] = wj_render_agent_term_list($post_id);
+	$lines[] = wj_render_linked_term_list($post_id, 'production', __('Production', 'twentytwentyfive-child'));
 	$lines[] = wj_render_linked_term_list($post_id, 'venue', __('Venue', 'twentytwentyfive-child'));
 	$lines[] = wj_render_linked_term_list($post_id, 'location', __('Location', 'twentytwentyfive-child'));
-	$lines[] = wj_render_linked_term_list($post_id, 'item_tag', __('Subject', 'twentytwentyfive-child'));
-
-	$artists = get_the_terms($post_id, 'artist');
-	$cross_links = [];
-	if ($artists && !is_wp_error($artists)) {
-		foreach ($artists as $artist) {
-			$term_link = get_term_link($artist);
-			if (is_wp_error($term_link)) {
-				continue;
-			}
-
-			$cross_links[] = sprintf(
-				'<a href="%s">%s</a>',
-				esc_url($term_link),
-				esc_html(sprintf(__('See all items for %s', 'twentytwentyfive-child'), $artist->name))
-			);
-		}
+	$event_link = get_post_meta($post_id, 'item_event_link', true);
+	if ($event_link) {
+		$lines[] = sprintf(
+			'<li><span>%s</span><div><a href="%s" target="_blank" rel="noreferrer noopener">%s</a></div></li>',
+			esc_html__('Related Link', 'twentytwentyfive-child'),
+			esc_url((string) $event_link),
+			esc_html__('Open link', 'twentytwentyfive-child')
+		);
 	}
+	$lines[] = wj_render_linked_term_list($post_id, 'item_tag', __('Subject', 'twentytwentyfive-child'));
+	$lines[] = wj_render_linked_term_list($post_id, 'collection', __('Collection', 'twentytwentyfive-child'));
 
 	ob_start();
 	?>
 	<div class="wj-item-meta-wrap">
 		<ul class="wj-item-meta"><?php echo wp_kses_post(implode('', array_filter($lines))); ?></ul>
-		<?php if ($cross_links) : ?>
-			<div class="wj-cross-links"><?php echo wp_kses_post(implode('', $cross_links)); ?></div>
-		<?php endif; ?>
 	</div>
 	<?php
 
@@ -434,7 +574,7 @@ function wj_render_term_intro(): string {
 
 	$copy = term_description($term, $term->taxonomy);
 	$linked_data = '';
-	if ('artist' === $term->taxonomy) {
+	if ('agent' === $term->taxonomy) {
 		$linked_data = wj_render_wikidata_card(wj_get_wikidata_entity_for_term($term));
 	}
 

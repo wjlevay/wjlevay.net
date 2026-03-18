@@ -1,6 +1,6 @@
 <?php
 /**
- * Admin UI for item metadata and artist linked-data fields.
+ * Admin UI for item metadata and agent linked-data fields.
  */
 
 if (!defined('ABSPATH')) {
@@ -103,6 +103,8 @@ function wj_save_item_meta(int $post_id): void {
 	if ($sort_date) {
 		update_post_meta($post_id, 'item_year', wj_get_sort_date_year($sort_date));
 	}
+
+	wj_remove_redundant_subject_terms($post_id);
 }
 add_action('save_post_collection_item', 'wj_save_item_meta');
 
@@ -168,37 +170,37 @@ function wj_default_collection_item_admin_sort(WP_Query $query): void {
 }
 add_action('pre_get_posts', 'wj_default_collection_item_admin_sort');
 
-function wj_add_artist_term_fields(): void {
+function wj_add_agent_term_fields(): void {
 	?>
 	<div class="form-field term-wikidata-wrap">
 		<label for="wikidata_id"><?php esc_html_e('Wikidata ID', 'twentytwentyfive-child'); ?></label>
 		<input type="text" name="wikidata_id" id="wikidata_id" value="" placeholder="Q11647">
-		<p><?php esc_html_e('Optional. Used to enrich artist pages with Wikidata and Wikipedia links.', 'twentytwentyfive-child'); ?></p>
+		<p><?php esc_html_e('Optional. Used to enrich agent pages with Wikidata and Wikipedia links.', 'twentytwentyfive-child'); ?></p>
 	</div>
 	<?php
 }
-add_action('artist_add_form_fields', 'wj_add_artist_term_fields');
+add_action('agent_add_form_fields', 'wj_add_agent_term_fields');
 
-function wj_edit_artist_term_fields(WP_Term $term): void {
+function wj_edit_agent_term_fields(WP_Term $term): void {
 	$wikidata_id = get_term_meta($term->term_id, 'wikidata_id', true);
 	?>
 	<tr class="form-field term-wikidata-wrap">
 		<th scope="row"><label for="wikidata_id"><?php esc_html_e('Wikidata ID', 'twentytwentyfive-child'); ?></label></th>
 		<td>
 			<input type="text" name="wikidata_id" id="wikidata_id" value="<?php echo esc_attr((string) $wikidata_id); ?>" placeholder="Q11647">
-			<p class="description"><?php esc_html_e('Optional. Used to enrich artist pages with Wikidata and Wikipedia links.', 'twentytwentyfive-child'); ?></p>
+			<p class="description"><?php esc_html_e('Optional. Used to enrich agent pages with Wikidata and Wikipedia links.', 'twentytwentyfive-child'); ?></p>
 		</td>
 	</tr>
 	<?php
 }
-add_action('artist_edit_form_fields', 'wj_edit_artist_term_fields');
+add_action('agent_edit_form_fields', 'wj_edit_agent_term_fields');
 
-function wj_save_artist_term_fields(int $term_id): void {
+function wj_save_agent_term_fields(int $term_id): void {
 	if (!array_key_exists('wikidata_id', $_POST)) {
 		return;
 	}
 
 	update_term_meta($term_id, 'wikidata_id', sanitize_text_field(wp_unslash($_POST['wikidata_id'])));
 }
-add_action('created_artist', 'wj_save_artist_term_fields');
-add_action('edited_artist', 'wj_save_artist_term_fields');
+add_action('created_agent', 'wj_save_agent_term_fields');
+add_action('edited_agent', 'wj_save_agent_term_fields');

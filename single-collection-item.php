@@ -34,7 +34,7 @@ global $post;
 	<main class="wp-block-group has-global-padding is-layout-constrained wp-block-group-is-layout-constrained wj-single-shell">
 		<div class="alignwide wj-single-inner">
 			<header class="wj-single-header">
-				<p class="wj-eyebrow"><?php esc_html_e('Collection Item', 'twentytwentyfive-child'); ?></p>
+				<?php echo wp_kses_post(wj_get_single_item_breadcrumbs((int) $post->ID)); ?>
 				<h1><?php the_title(); ?></h1>
 			</header>
 

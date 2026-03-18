@@ -376,10 +376,12 @@ if (defined('WP_CLI') && WP_CLI) {
 
 		private function apply_item_data(int $post_id, array $data, string $images_base): void {
 			$this->assign_terms($post_id, 'collection', $data['collection'] ?? '');
-			$this->assign_terms($post_id, 'artist', $data['artists'] ?? '');
+			$this->assign_terms($post_id, 'agent', $data['agents'] ?? ($data['artists'] ?? ''));
+			$this->assign_terms($post_id, 'production', $data['production'] ?? '');
 			$this->assign_terms($post_id, 'venue', $data['venue'] ?? '');
 			$this->assign_terms($post_id, 'location', $data['location'] ?? '');
 			$this->assign_terms($post_id, 'item_tag', $data['subjects'] ?? '');
+			wj_remove_redundant_subject_terms($post_id);
 
 			foreach (array_keys(WJ_ITEM_META) as $meta_key) {
 				if (!array_key_exists($meta_key, $data) || '' === $data[$meta_key]) {

@@ -79,6 +79,7 @@ const WJ_ITEM_META_UI = [
 ];
 
 const WJ_ITEM_DATE_SCHEMA_VERSION = 2;
+const WJ_SUBJECT_DEDUP_SCHEMA_VERSION = 1;
 
 function wj_normalize_sort_date(string $raw): string {
 	$value = trim($raw);
@@ -176,10 +177,11 @@ function wj_register_content_model(): void {
 	);
 
 	$flat_taxonomies = [
-		'artist'   => __('Artists', 'twentytwentyfive-child'),
-		'venue'    => __('Venues', 'twentytwentyfive-child'),
-		'location' => __('Locations', 'twentytwentyfive-child'),
-		'item_tag' => __('Subjects', 'twentytwentyfive-child'),
+		'agent'      => __('Agents', 'twentytwentyfive-child'),
+		'production' => __('Productions', 'twentytwentyfive-child'),
+		'venue'      => __('Venues', 'twentytwentyfive-child'),
+		'location'   => __('Locations', 'twentytwentyfive-child'),
+		'item_tag'   => __('Subjects', 'twentytwentyfive-child'),
 	];
 
 	foreach ($flat_taxonomies as $slug => $label) {
@@ -199,6 +201,25 @@ function wj_register_content_model(): void {
 			)
 		);
 	}
+
+	register_taxonomy(
+		'artist',
+		['collection_item'],
+		[
+			'labels'            => [
+				'name'          => __('Legacy Artists', 'twentytwentyfive-child'),
+				'singular_name' => __('Legacy Artist', 'twentytwentyfive-child'),
+			],
+			'public'            => false,
+			'publicly_queryable'=> false,
+			'show_ui'           => false,
+			'show_admin_column' => false,
+			'show_in_rest'      => false,
+			'rewrite'           => false,
+			'query_var'         => false,
+			'hierarchical'      => false,
+		]
+	);
 
 	foreach (WJ_ITEM_META as $meta_key => $type) {
 		register_post_meta(
@@ -275,6 +296,63 @@ function wj_backfill_item_date_schema(): void {
 }
 add_action('init', 'wj_backfill_item_date_schema', 30);
 
+function wj_remove_redundant_subject_terms(int $post_id): void {
+	$subject_terms = wp_get_post_terms($post_id, 'item_tag');
+	if (is_wp_error($subject_terms) || !$subject_terms) {
+		return;
+	}
+
+	$comparison_names = [];
+	foreach (['agent', 'production', 'venue', 'location'] as $taxonomy) {
+		$terms = wp_get_post_terms($post_id, $taxonomy, ['fields' => 'names']);
+		if (is_wp_error($terms) || !$terms) {
+			continue;
+		}
+
+		foreach ($terms as $term_name) {
+			$comparison_names[mb_strtolower(trim((string) $term_name))] = true;
+		}
+	}
+
+	if (!$comparison_names) {
+		return;
+	}
+
+	$filtered_subjects = [];
+	foreach ($subject_terms as $term) {
+		$key = mb_strtolower(trim((string) $term->name));
+		if (isset($comparison_names[$key])) {
+			continue;
+		}
+		$filtered_subjects[] = $term->term_id;
+	}
+
+	wp_set_object_terms($post_id, $filtered_subjects, 'item_tag', false);
+}
+
+function wj_backfill_subject_dedup_schema(): void {
+	$stored_version = (int) get_option('wj_subject_dedup_schema_version', 0);
+	if ($stored_version >= WJ_SUBJECT_DEDUP_SCHEMA_VERSION) {
+		return;
+	}
+
+	$post_ids = get_posts(
+		[
+			'post_type'      => 'collection_item',
+			'post_status'    => 'any',
+			'posts_per_page' => -1,
+			'fields'         => 'ids',
+		]
+	);
+
+	foreach ($post_ids as $post_id) {
+		wj_remove_redundant_subject_terms((int) $post_id);
+	}
+
+	update_option('wj_subject_dedup_schema_version', WJ_SUBJECT_DEDUP_SCHEMA_VERSION, false);
+}
+add_action('init', 'wj_backfill_subject_dedup_schema', 45);
+
 function wj_get_filter_values(): array {
 	$item_year = 0;
 	if (isset($_GET['item_year'])) {
@@ -285,7 +363,8 @@ function wj_get_filter_values(): array {
 
 	return [
 		'search'     => isset($_GET['s']) ? sanitize_text_field(wp_unslash($_GET['s'])) : '',
-		'artist'     => isset($_GET['artist']) ? sanitize_title(wp_unslash($_GET['artist'])) : '',
+		'agent'      => isset($_GET['agent']) ? sanitize_title(wp_unslash($_GET['agent'])) : (isset($_GET['artist']) ? sanitize_title(wp_unslash($_GET['artist'])) : ''),
+		'production' => isset($_GET['production']) ? sanitize_title(wp_unslash($_GET['production'])) : '',
 		'venue'      => isset($_GET['venue']) ? sanitize_title(wp_unslash($_GET['venue'])) : '',
 		'location'   => isset($_GET['location']) ? sanitize_title(wp_unslash($_GET['location'])) : '',
 		'item_tag'   => isset($_GET['item_tag']) ? sanitize_title(wp_unslash($_GET['item_tag'])) : '',
@@ -304,7 +383,7 @@ function wj_is_collection_query(WP_Query $query): bool {
 		return true;
 	}
 
-	return $query->is_tax(['collection', 'artist', 'venue', 'location', 'item_tag']);
+	return $query->is_tax(['collection', 'agent', 'production', 'venue', 'location', 'item_tag']);
 }
 
 function wj_filter_collection_queries(WP_Query $query): void {
@@ -335,7 +414,7 @@ function wj_filter_collection_queries(WP_Query $query): void {
 	$tax_query = $query->get('tax_query');
 	$tax_query = is_array($tax_query) ? $tax_query : [];
 
-	foreach (['artist', 'venue', 'location', 'item_tag', 'collection'] as $taxonomy) {
+	foreach (['agent', 'production', 'venue', 'location', 'item_tag', 'collection'] as $taxonomy) {
 		if (!$filters[$taxonomy]) {
 			continue;
 		}

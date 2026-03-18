@@ -41,7 +41,7 @@ $count = (int) $term->count;
 	<main class="wp-block-group has-global-padding is-layout-constrained wp-block-group-is-layout-constrained wj-tax-shell">
 		<div class="alignwide wj-tax-inner">
 			<header class="wj-tax-header">
-				<p class="wj-eyebrow"><?php echo esc_html(get_taxonomy($term->taxonomy)->labels->singular_name ?? __('Archive', 'twentytwentyfive-child')); ?></p>
+				<?php echo wp_kses_post(wj_get_taxonomy_breadcrumbs($term)); ?>
 				<div class="wj-tax-header-grid">
 					<div class="wj-tax-heading">
 						<h1><?php single_term_title(); ?></h1>
