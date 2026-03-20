@@ -71,15 +71,7 @@ if (!defined('ABSPATH')) {
 					</div>
 
 					<nav class="wj-tax-pagination" aria-label="<?php esc_attr_e('Pagination', 'twentytwentyfive-child'); ?>">
-						<?php
-						the_posts_pagination(
-							[
-								'mid_size'  => 1,
-								'prev_text' => __('Previous', 'twentytwentyfive-child'),
-								'next_text' => __('Next', 'twentytwentyfive-child'),
-							]
-						);
-						?>
+						<?php echo wj_render_compact_pagination(); ?>
 					</nav>
 				</section>
 			<?php else : ?>

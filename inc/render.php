@@ -126,6 +126,98 @@ function wj_get_taxonomy_breadcrumbs(WP_Term $term): string {
 	return wj_render_breadcrumbs($crumbs);
 }
 
+function wj_render_compact_pagination(): string {
+	global $wp_query;
+
+	if (!$wp_query instanceof WP_Query) {
+		return '';
+	}
+
+	$total_pages = (int) $wp_query->max_num_pages;
+	if ($total_pages < 2) {
+		return '';
+	}
+
+	$current_page = max(1, (int) get_query_var('paged'));
+	$base_url = html_entity_decode(get_pagenum_link(1));
+	$query_args = $_GET;
+	unset($query_args['paged']);
+
+	$page_items = [];
+
+	if ($total_pages <= 7) {
+		for ($i = 1; $i <= $total_pages; $i++) {
+			$page_items[] = $i;
+		}
+	} else {
+		$page_items[] = 1;
+
+		if ($current_page <= 4) {
+			$page_items = array_merge($page_items, [2, 3, 4, 5, 'ellipsis', $total_pages]);
+		} elseif ($current_page >= $total_pages - 3) {
+			$page_items = array_merge(
+				$page_items,
+				[
+					'ellipsis',
+					$total_pages - 4,
+					$total_pages - 3,
+					$total_pages - 2,
+					$total_pages - 1,
+					$total_pages,
+				]
+			);
+		} else {
+			$page_items = array_merge(
+				$page_items,
+				[
+					'ellipsis',
+					$current_page - 1,
+					$current_page,
+					$current_page + 1,
+					'ellipsis',
+					$total_pages,
+				]
+			);
+		}
+	}
+
+	$page_items = array_values(array_unique($page_items, SORT_REGULAR));
+
+	$build_page_url = static function (int $page_number) use ($base_url, $query_args): string {
+		$url = $page_number > 1 ? get_pagenum_link($page_number) : $base_url;
+		if ($query_args) {
+			$url = add_query_arg($query_args, $url);
+		}
+
+		return $url;
+	};
+
+	ob_start();
+	?>
+	<div class="nav-links">
+		<?php if ($current_page > 1) : ?>
+			<a class="prev page-numbers" href="<?php echo esc_url($build_page_url($current_page - 1)); ?>"><?php esc_html_e('Previous', 'twentytwentyfive-child'); ?></a>
+		<?php endif; ?>
+
+		<?php foreach ($page_items as $item) : ?>
+			<?php if ('ellipsis' === $item) : ?>
+				<span class="page-numbers dots">&hellip;</span>
+			<?php elseif ((int) $item === $current_page) : ?>
+				<span aria-current="page" class="page-numbers current"><?php echo esc_html((string) $item); ?></span>
+			<?php else : ?>
+				<a class="page-numbers" href="<?php echo esc_url($build_page_url((int) $item)); ?>"><?php echo esc_html((string) $item); ?></a>
+			<?php endif; ?>
+		<?php endforeach; ?>
+
+		<?php if ($current_page < $total_pages) : ?>
+			<a class="next page-numbers" href="<?php echo esc_url($build_page_url($current_page + 1)); ?>"><?php esc_html_e('Next', 'twentytwentyfive-child'); ?></a>
+		<?php endif; ?>
+	</div>
+	<?php
+
+	return (string) ob_get_clean();
+}
+
 function wj_render_collections_index(): string {
 	$terms = get_terms(
 		[
