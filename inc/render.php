@@ -235,20 +235,78 @@ function wj_render_collections_index(): string {
 
 	ob_start();
 	?>
-	<div class="wj-collection-grid">
+	<div class="wj-collection-sections">
 		<?php foreach ($terms as $term) : ?>
 			<?php
 			$link = get_term_link($term);
 			$count = (int) $term->count;
+			$items = get_posts(
+				[
+					'post_type'              => 'collection_item',
+					'post_status'            => 'publish',
+					'posts_per_page'         => 3,
+					'ignore_sticky_posts'    => true,
+					'no_found_rows'          => true,
+					'update_post_meta_cache' => false,
+					'update_post_term_cache' => true,
+					'meta_key'               => 'item_sort_date',
+					'orderby'                => [
+						'meta_value' => 'DESC',
+						'date'       => 'DESC',
+					],
+					'tax_query'              => [
+						[
+							'taxonomy' => 'collection',
+							'field'    => 'term_id',
+							'terms'    => [$term->term_id],
+						],
+					],
+				]
+			);
 			?>
-			<article class="wj-collection-card">
-				<p class="wj-eyebrow"><?php esc_html_e('Collection', 'twentytwentyfive-child'); ?></p>
-				<h2><a href="<?php echo esc_url($link); ?>"><?php echo esc_html($term->name); ?></a></h2>
-				<p class="wj-card-meta">
-					<span class="wj-card-meta__count"><?php echo esc_html((string) $count); ?></span>
-					<span class="wj-card-meta__label"><?php echo esc_html(_n('item', 'items', $count, 'twentytwentyfive-child')); ?></span>
-				</p>
-			</article>
+			<section class="wj-collection-section">
+				<div class="wj-collection-section__header">
+					<div class="wj-collection-section__intro">
+						<p class="wj-eyebrow"><?php esc_html_e('Collection', 'twentytwentyfive-child'); ?></p>
+						<h2><a href="<?php echo esc_url($link); ?>"><?php echo esc_html($term->name); ?></a></h2>
+					</div>
+					<div class="wj-collection-section__meta">
+						<p class="wj-card-meta">
+							<span class="wj-card-meta__count"><?php echo esc_html((string) $count); ?></span>
+							<span class="wj-card-meta__label"><?php echo esc_html(_n('item', 'items', $count, 'twentytwentyfive-child')); ?></span>
+						</p>
+						<a class="wj-collection-section__link" href="<?php echo esc_url($link); ?>"><?php esc_html_e('View collection', 'twentytwentyfive-child'); ?></a>
+					</div>
+				</div>
+
+				<div class="wj-collection-rail" aria-label="<?php echo esc_attr(sprintf(__('Preview items from %s', 'twentytwentyfive-child'), $term->name)); ?>">
+					<?php foreach ($items as $post) : ?>
+						<?php
+						setup_postdata($post);
+						$post_id = (int) $post->ID;
+						?>
+						<article class="wj-collection-preview">
+							<a class="wj-collection-preview__image" href="<?php echo esc_url(get_permalink($post_id)); ?>">
+								<?php
+								if (has_post_thumbnail($post_id)) {
+									echo get_the_post_thumbnail($post_id, 'wj-card');
+								}
+								?>
+							</a>
+							<div class="wj-collection-preview__body">
+								<h3><a href="<?php echo esc_url(get_permalink($post_id)); ?>"><?php echo esc_html(get_the_title($post_id)); ?></a></h3>
+								<?php echo wj_render_item_card_meta(); ?>
+							</div>
+						</article>
+					<?php endforeach; ?>
+					<?php wp_reset_postdata(); ?>
+
+					<a class="wj-collection-preview wj-collection-preview--more" href="<?php echo esc_url($link); ?>">
+						<span class="wj-collection-preview__more-copy"><?php esc_html_e('Browse the full collection', 'twentytwentyfive-child'); ?></span>
+						<span class="wj-collection-preview__more-action"><?php esc_html_e('View all', 'twentytwentyfive-child'); ?></span>
+					</a>
+				</div>
+			</section>
 		<?php endforeach; ?>
 	</div>
 	<?php
