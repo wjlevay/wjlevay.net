@@ -259,8 +259,9 @@
 .wj-collection-sections {
 	display: grid;
 	gap: 2.2rem;
-	width: min(calc(100vw - 2rem), 1520px);
-	max-width: none;
+	width: 100%;
+	max-width: 1520px;
+	box-sizing: border-box;
 	margin-inline: auto;
 }
 
