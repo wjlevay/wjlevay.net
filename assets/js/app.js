@@ -1,22 +1,9 @@
 document.addEventListener('DOMContentLoaded', () => {
-	const viewers = document.querySelectorAll('[data-wj-viewer]');
-	const isSmallScreen = window.matchMedia('(max-width: 640px)').matches;
+	const mobileMedia = window.matchMedia('(max-width: 640px)');
 
-	viewers.forEach((element) => {
-		if (!window.OpenSeadragon) {
-			return;
-		}
-
-		let images = [];
-
-		try {
-			images = JSON.parse(element.dataset.images || '[]');
-		} catch (error) {
-			images = [];
-		}
-
-		if (!images.length) {
-			return;
+	const createViewer = (element, images, options = {}) => {
+		if (!window.OpenSeadragon || !element || !images.length) {
+			return null;
 		}
 
 		let naturalWidth = 0;
@@ -29,7 +16,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 			element.style.setProperty('--wj-viewer-ratio', `${naturalWidth} / ${naturalHeight}`);
 
-			if (!window.matchMedia('(max-width: 640px)').matches) {
+			if (!mobileMedia.matches || options.forceModal) {
 				element.style.removeProperty('height');
 				return;
 			}
@@ -45,31 +32,35 @@ document.addEventListener('DOMContentLoaded', () => {
 			element.style.height = `${Math.round(targetHeight)}px`;
 		};
 
-		const preload = new window.Image();
-		preload.addEventListener('load', () => {
-			if (preload.naturalWidth && preload.naturalHeight) {
-				naturalWidth = preload.naturalWidth;
-				naturalHeight = preload.naturalHeight;
-				applyViewerSizing();
-			}
-		});
-		preload.src = images[0];
+		const loadDimensions = (imageSrc) => {
+			const preload = new window.Image();
+			preload.addEventListener('load', () => {
+				if (preload.naturalWidth && preload.naturalHeight) {
+					naturalWidth = preload.naturalWidth;
+					naturalHeight = preload.naturalHeight;
+					applyViewerSizing();
+				}
+			});
+			preload.src = imageSrc;
+		};
+
+		loadDimensions(images[0]);
 
 		const viewer = OpenSeadragon({
-			id: element.dataset.viewerId,
+			id: element.dataset.viewerId || element.id,
 			prefixUrl: 'https://cdn.jsdelivr.net/npm/openseadragon@5.0.1/build/openseadragon/images/',
 			showNavigator: false,
-			showNavigationControl: !isSmallScreen,
+			showNavigationControl: !mobileMedia.matches || options.forceModal,
 			sequenceMode: false,
-			showRotationControl: !isSmallScreen,
+			showRotationControl: false,
 			constrainDuringPan: true,
 			visibilityRatio: 1,
-			minZoomImageRatio: isSmallScreen ? 0.9 : 0.1,
-			maxZoomPixelRatio: isSmallScreen ? 2.5 : 3,
+			minZoomImageRatio: mobileMedia.matches && !options.forceModal ? 0.9 : 0.1,
+			maxZoomPixelRatio: mobileMedia.matches ? 2.5 : 3,
 			defaultZoomLevel: 0,
 			homeFillsViewer: false,
-			animationTime: isSmallScreen ? 0.9 : 1.2,
-			springStiffness: isSmallScreen ? 6.5 : 7,
+			animationTime: mobileMedia.matches ? 0.9 : 1.2,
+			springStiffness: mobileMedia.matches ? 6.5 : 7,
 			gestureSettingsTouch: {
 				pinchRotate: false,
 				clickToZoom: false,
@@ -87,33 +78,169 @@ document.addEventListener('DOMContentLoaded', () => {
 			viewer.viewport.goHome(true);
 		});
 
-		window.addEventListener('resize', () => {
-			applyViewerSizing();
+		window.addEventListener('resize', applyViewerSizing);
+
+		return {
+			viewer,
+			openImage(imageSrc) {
+				loadDimensions(imageSrc);
+				viewer.open({
+					...(window.wjTheme?.viewerTileSource || {}),
+					url: imageSrc,
+				});
+			},
+			goHome() {
+				viewer.viewport.goHome(true);
+			},
+		};
+	};
+
+	document.querySelectorAll('[data-wj-viewer-shell]').forEach((shell) => {
+		const inlineElement = shell.querySelector('[data-wj-viewer]');
+		if (!inlineElement) {
+			return;
+		}
+
+		let images = [];
+		try {
+			images = JSON.parse(inlineElement.dataset.images || '[]');
+		} catch (error) {
+			images = [];
+		}
+
+		if (!images.length) {
+			return;
+		}
+
+		let inlineInstance = null;
+		if (!mobileMedia.matches) {
+			inlineInstance = createViewer(inlineElement, images);
+		}
+
+		shell.querySelectorAll('[data-wj-thumb]').forEach((button) => {
+			button.addEventListener('click', () => {
+				if (!inlineInstance) {
+					return;
+				}
+
+				const imageSrc = button.dataset.imageSrc;
+				if (!imageSrc) {
+					return;
+				}
+
+				inlineInstance.openImage(imageSrc);
+			});
 		});
 
-		const buttons = element.parentElement.querySelectorAll('[data-wj-thumb]');
-		buttons.forEach((button) => {
+		const modal = document.getElementById(`${inlineElement.dataset.viewerId}-modal`);
+		const modalImage = modal?.querySelector('[data-wj-modal-image]');
+		const modalCount = modal?.querySelector('[data-wj-modal-count]');
+		const modalPrev = modal?.querySelector('[data-wj-modal-prev]');
+		const modalNext = modal?.querySelector('[data-wj-modal-next]');
+		let modalIndex = 0;
+
+		const renderModalState = () => {
+			if (!modalCount) {
+				return;
+			}
+
+			modalCount.textContent = `Image ${modalIndex + 1} of ${images.length}`;
+		};
+
+		const setActiveModalImage = (imageSrc, activeButton = null) => {
+			if (!modalImage || !imageSrc) {
+				return;
+			}
+
+			const foundIndex = images.indexOf(imageSrc);
+			if (foundIndex >= 0) {
+				modalIndex = foundIndex;
+			}
+
+			modalImage.src = imageSrc;
+			renderModalState();
+
+			modal?.querySelectorAll('[data-wj-modal-thumb]').forEach((button) => {
+				const isActive = button === activeButton || button.dataset.imageSrc === imageSrc;
+				button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+			});
+		};
+
+		modal?.querySelectorAll('[data-wj-modal-thumb]').forEach((button) => {
 			button.addEventListener('click', () => {
 				const imageSrc = button.dataset.imageSrc;
 				if (!imageSrc) {
 					return;
 				}
 
-				const thumbPreload = new window.Image();
-				thumbPreload.addEventListener('load', () => {
-					if (thumbPreload.naturalWidth && thumbPreload.naturalHeight) {
-						naturalWidth = thumbPreload.naturalWidth;
-						naturalHeight = thumbPreload.naturalHeight;
-						applyViewerSizing();
-					}
-				});
-				thumbPreload.src = imageSrc;
-
-				viewer.open({
-					...(window.wjTheme?.viewerTileSource || {}),
-					url: imageSrc,
-				});
+				setActiveModalImage(imageSrc, button);
 			});
+		});
+
+		modalPrev?.addEventListener('click', () => {
+			modalIndex = (modalIndex - 1 + images.length) % images.length;
+			setActiveModalImage(images[modalIndex]);
+		});
+
+		modalNext?.addEventListener('click', () => {
+			modalIndex = (modalIndex + 1) % images.length;
+			setActiveModalImage(images[modalIndex]);
+		});
+
+		const openModal = (startIndex = 0) => {
+			if (!modal) {
+				return;
+			}
+
+			modal.hidden = false;
+			document.documentElement.classList.add('wj-modal-open');
+			modalIndex = Math.max(0, Math.min(startIndex, images.length - 1));
+			setActiveModalImage(images[modalIndex]);
+		};
+
+		const closeModal = () => {
+			if (!modal) {
+				return;
+			}
+
+			modal.hidden = true;
+			document.documentElement.classList.remove('wj-modal-open');
+		};
+
+		shell.querySelectorAll('[data-wj-modal-open]').forEach((button) => {
+			button.addEventListener('click', () => openModal());
+		});
+
+		shell.querySelectorAll('[data-wj-thumb]').forEach((button) => {
+			if (!mobileMedia.matches) {
+				return;
+			}
+
+			button.addEventListener('click', () => {
+				const imageSrc = button.dataset.imageSrc;
+				if (!imageSrc) {
+					return;
+				}
+
+				const index = images.indexOf(imageSrc);
+				openModal(index >= 0 ? index : 0);
+			});
+		});
+
+		modal?.querySelectorAll('[data-wj-modal-close]').forEach((button) => {
+			button.addEventListener('click', closeModal);
+		});
+
+		modal?.addEventListener('click', (event) => {
+			if (event.target === modal) {
+				closeModal();
+			}
+		});
+
+		window.addEventListener('keydown', (event) => {
+			if ('Escape' === event.key && modal && !modal.hidden) {
+				closeModal();
+			}
 		});
 	});
 });

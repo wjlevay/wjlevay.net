@@ -38,6 +38,8 @@ global $post;
 				<h1><?php the_title(); ?></h1>
 			</header>
 
+			<?php echo wj_render_item_navigation((int) $post->ID); ?>
+
 			<div class="wj-single-layout">
 				<section class="wj-single-viewer-panel" aria-label="<?php esc_attr_e('Item images', 'twentytwentyfive-child'); ?>">
 					<?php echo wj_render_item_viewer(); ?>

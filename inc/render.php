@@ -218,6 +218,288 @@ function wj_render_compact_pagination(): string {
 	return (string) ob_get_clean();
 }
 
+function wj_get_current_browse_url(): string {
+	$request_uri = isset($_SERVER['REQUEST_URI']) ? wp_unslash((string) $_SERVER['REQUEST_URI']) : '';
+	if ('' === $request_uri) {
+		return '';
+	}
+
+	return home_url($request_uri);
+}
+
+function wj_get_current_browse_filters(): array {
+	$filters = wj_get_filter_values();
+
+	if (is_tax()) {
+		$term = get_queried_object();
+		if ($term instanceof WP_Term && array_key_exists($term->taxonomy, $filters) && '' === (string) $filters[$term->taxonomy]) {
+			$filters[$term->taxonomy] = $term->slug;
+		}
+	}
+
+	return $filters;
+}
+
+function wj_get_browse_link_args(array $filters, string $browse_url = ''): array {
+	$args = [];
+	$map = [
+		'search'     => 'browse_s',
+		'agent'      => 'browse_agent',
+		'production' => 'browse_production',
+		'collection' => 'browse_collection',
+		'venue'      => 'browse_venue',
+		'location'   => 'browse_location',
+		'item_tag'   => 'browse_item_tag',
+		'year'       => 'browse_item_year',
+		'sort'       => 'browse_sort',
+	];
+
+	foreach ($map as $key => $query_key) {
+		$value = $filters[$key] ?? '';
+		$is_empty_numeric = is_numeric($value) && 0 === (int) $value;
+		if ('' === (string) $value || $is_empty_numeric) {
+			continue;
+		}
+
+		if ('sort' === $key && 'date_desc' === $value) {
+			continue;
+		}
+
+		$args[$query_key] = $value;
+	}
+
+	if ($browse_url) {
+		$args['browse_url'] = rawurlencode($browse_url);
+	}
+
+	return $args;
+}
+
+function wj_get_item_permalink_with_context(int $post_id, array $filters = [], string $browse_url = ''): string {
+	$url = get_permalink($post_id);
+	if (!$url) {
+		return '';
+	}
+
+	$link_args = wj_get_browse_link_args($filters, $browse_url);
+	return $link_args ? add_query_arg($link_args, $url) : $url;
+}
+
+function wj_get_browse_context_from_request(): array {
+	$context = [
+		'browse_url' => '',
+		'filters'    => [
+			'search'     => '',
+			'agent'      => '',
+			'production' => '',
+			'collection' => '',
+			'venue'      => '',
+			'location'   => '',
+			'item_tag'   => '',
+			'year'       => 0,
+			'sort'       => 'date_desc',
+		],
+	];
+
+	$raw_browse_url = isset($_GET['browse_url']) ? (string) wp_unslash($_GET['browse_url']) : '';
+	if ($raw_browse_url) {
+		$context['browse_url'] = esc_url_raw(rawurldecode($raw_browse_url));
+	}
+
+	$context['filters']['search'] = isset($_GET['browse_s']) ? sanitize_text_field(wp_unslash($_GET['browse_s'])) : '';
+	$context['filters']['agent'] = isset($_GET['browse_agent']) ? sanitize_title(wp_unslash($_GET['browse_agent'])) : '';
+	$context['filters']['production'] = isset($_GET['browse_production']) ? sanitize_title(wp_unslash($_GET['browse_production'])) : '';
+	$context['filters']['collection'] = isset($_GET['browse_collection']) ? sanitize_title(wp_unslash($_GET['browse_collection'])) : '';
+	$context['filters']['venue'] = isset($_GET['browse_venue']) ? sanitize_title(wp_unslash($_GET['browse_venue'])) : '';
+	$context['filters']['location'] = isset($_GET['browse_location']) ? sanitize_title(wp_unslash($_GET['browse_location'])) : '';
+	$context['filters']['item_tag'] = isset($_GET['browse_item_tag']) ? sanitize_title(wp_unslash($_GET['browse_item_tag'])) : '';
+	$context['filters']['year'] = isset($_GET['browse_item_year']) ? absint($_GET['browse_item_year']) : 0;
+	$context['filters']['sort'] = isset($_GET['browse_sort']) ? sanitize_key(wp_unslash($_GET['browse_sort'])) : 'date_desc';
+
+	return $context;
+}
+
+function wj_get_context_item_ids(array $filters): array {
+	$query_args = [
+		'post_type'              => 'collection_item',
+		'post_status'            => 'publish',
+		'posts_per_page'         => -1,
+		'fields'                 => 'ids',
+		'ignore_sticky_posts'    => true,
+		'no_found_rows'          => true,
+		'update_post_meta_cache' => false,
+		'update_post_term_cache' => false,
+	];
+
+	if (!empty($filters['search'])) {
+		$query_args['s'] = $filters['search'];
+	}
+
+	$meta_query = [];
+	if (!empty($filters['year'])) {
+		$meta_query[] = [
+			'key'   => 'item_year',
+			'value' => (int) $filters['year'],
+			'type'  => 'NUMERIC',
+		];
+	}
+	if ($meta_query) {
+		$query_args['meta_query'] = $meta_query;
+	}
+
+	$tax_query = [];
+	foreach (['agent', 'production', 'venue', 'location', 'item_tag', 'collection'] as $taxonomy) {
+		if (empty($filters[$taxonomy])) {
+			continue;
+		}
+
+		$tax_query[] = [
+			'taxonomy' => $taxonomy,
+			'field'    => 'slug',
+			'terms'    => [$filters[$taxonomy]],
+		];
+	}
+	if ($tax_query) {
+		$query_args['tax_query'] = $tax_query;
+	}
+
+	switch ($filters['sort'] ?? 'date_desc') {
+		case 'title_asc':
+			$query_args['orderby'] = 'title';
+			$query_args['order'] = 'ASC';
+			break;
+		case 'title_desc':
+			$query_args['orderby'] = 'title';
+			$query_args['order'] = 'DESC';
+			break;
+		case 'date_asc':
+			$query_args['meta_key'] = 'item_sort_date';
+			$query_args['orderby'] = 'meta_value';
+			$query_args['order'] = 'ASC';
+			break;
+		case 'recent':
+			$query_args['orderby'] = 'date';
+			$query_args['order'] = 'DESC';
+			break;
+		default:
+			$query_args['meta_key'] = 'item_sort_date';
+			$query_args['orderby'] = 'meta_value';
+			$query_args['order'] = 'DESC';
+			break;
+	}
+
+	$query = new WP_Query($query_args);
+	return array_map('intval', $query->posts);
+}
+
+function wj_get_collection_fallback_ids(int $post_id): array {
+	$collections = get_the_terms($post_id, 'collection');
+	if (!$collections || is_wp_error($collections)) {
+		return [];
+	}
+
+	$query = new WP_Query(
+		[
+			'post_type'              => 'collection_item',
+			'post_status'            => 'publish',
+			'posts_per_page'         => -1,
+			'fields'                 => 'ids',
+			'ignore_sticky_posts'    => true,
+			'no_found_rows'          => true,
+			'update_post_meta_cache' => false,
+			'update_post_term_cache' => false,
+			'meta_key'               => 'item_sort_date',
+			'orderby'                => 'meta_value',
+			'order'                  => 'DESC',
+			'tax_query'              => [
+				[
+					'taxonomy' => 'collection',
+					'field'    => 'term_id',
+					'terms'    => [($collections[0])->term_id],
+				],
+			],
+		]
+	);
+
+	return array_map('intval', $query->posts);
+}
+
+function wj_render_item_navigation(int $post_id): string {
+	$context = wj_get_browse_context_from_request();
+	$item_ids = [];
+	$back_url = '';
+	$is_filtered_context = false;
+
+	foreach ($context['filters'] as $key => $value) {
+		if ('sort' === $key) {
+			if ('date_desc' !== $value) {
+				$is_filtered_context = true;
+				break;
+			}
+			continue;
+		}
+
+		$is_empty_numeric = is_numeric($value) && 0 === (int) $value;
+		if ('' !== (string) $value && !$is_empty_numeric) {
+			$is_filtered_context = true;
+			break;
+		}
+	}
+
+	if ($context['browse_url']) {
+		$back_url = $context['browse_url'];
+	}
+
+	if ($is_filtered_context || $back_url) {
+		$item_ids = wj_get_context_item_ids($context['filters']);
+	} else {
+		$item_ids = wj_get_collection_fallback_ids($post_id);
+		$collections = get_the_terms($post_id, 'collection');
+		if ($collections && !is_wp_error($collections)) {
+			$collection_link = get_term_link($collections[0]);
+			if (!is_wp_error($collection_link)) {
+				$back_url = $collection_link;
+			}
+		}
+	}
+
+	if (!$item_ids) {
+		return '';
+	}
+
+	$current_index = array_search($post_id, $item_ids, true);
+	if (false === $current_index) {
+		return '';
+	}
+
+	$prev_id = $item_ids[$current_index - 1] ?? 0;
+	$next_id = $item_ids[$current_index + 1] ?? 0;
+
+	$link_filters = $context['filters'];
+	$link_url = $back_url;
+
+	ob_start();
+	?>
+	<nav class="wj-item-nav" aria-label="<?php esc_attr_e('Item navigation', 'twentytwentyfive-child'); ?>">
+		<div class="wj-item-nav__back">
+			<?php if ($back_url) : ?>
+				<a href="<?php echo esc_url($back_url); ?>"><?php esc_html_e('Back to results', 'twentytwentyfive-child'); ?></a>
+			<?php endif; ?>
+		</div>
+		<div class="wj-item-nav__links">
+			<?php if ($prev_id) : ?>
+				<a class="wj-item-nav__link" href="<?php echo esc_url(wj_get_item_permalink_with_context((int) $prev_id, $link_filters, $link_url)); ?>"><?php esc_html_e('Previous', 'twentytwentyfive-child'); ?></a>
+			<?php endif; ?>
+			<?php if ($next_id) : ?>
+				<a class="wj-item-nav__link" href="<?php echo esc_url(wj_get_item_permalink_with_context((int) $next_id, $link_filters, $link_url)); ?>"><?php esc_html_e('Next', 'twentytwentyfive-child'); ?></a>
+			<?php endif; ?>
+		</div>
+	</nav>
+	<?php
+
+	return (string) ob_get_clean();
+}
+
 function wj_render_collections_index(): string {
 	$terms = get_terms(
 		[
@@ -240,6 +522,18 @@ function wj_render_collections_index(): string {
 			<?php
 			$link = get_term_link($term);
 			$count = (int) $term->count;
+			$preview_filters = [
+				'search'     => '',
+				'agent'      => '',
+				'production' => '',
+				'collection' => $term->slug,
+				'venue'      => '',
+				'location'   => '',
+				'item_tag'   => '',
+				'year'       => 0,
+				'sort'       => 'date_desc',
+			];
+			$browse_url = wj_get_current_browse_url();
 			$items = get_posts(
 				[
 					'post_type'              => 'collection_item',
@@ -286,7 +580,7 @@ function wj_render_collections_index(): string {
 						$post_id = (int) $post->ID;
 						?>
 						<article class="wj-collection-preview">
-							<a class="wj-collection-preview__image" href="<?php echo esc_url(get_permalink($post_id)); ?>">
+							<a class="wj-collection-preview__image" href="<?php echo esc_url(wj_get_item_permalink_with_context($post_id, $preview_filters, $browse_url)); ?>">
 								<?php
 								if (has_post_thumbnail($post_id)) {
 									echo get_the_post_thumbnail($post_id, 'wj-card');
@@ -294,7 +588,7 @@ function wj_render_collections_index(): string {
 								?>
 							</a>
 							<div class="wj-collection-preview__body">
-								<h3><a href="<?php echo esc_url(get_permalink($post_id)); ?>"><?php echo esc_html(get_the_title($post_id)); ?></a></h3>
+								<h3><a href="<?php echo esc_url(wj_get_item_permalink_with_context($post_id, $preview_filters, $browse_url)); ?>"><?php echo esc_html(get_the_title($post_id)); ?></a></h3>
 								<?php echo wj_render_item_card_meta(); ?>
 							</div>
 						</article>
@@ -687,9 +981,21 @@ function wj_render_item_viewer(): string {
 		return '';
 	}
 
+	$primary_image = $images[0];
+
 	ob_start();
 	?>
 	<div class="wj-viewer-shell" data-wj-viewer-shell>
+		<button
+			type="button"
+			class="wj-mobile-viewer-trigger"
+			data-wj-modal-open
+			data-modal-target="<?php echo esc_attr($viewer_id . '-modal'); ?>"
+			aria-label="<?php esc_attr_e('Open image viewer', 'twentytwentyfive-child'); ?>"
+		>
+			<img src="<?php echo esc_url($primary_image); ?>" alt="">
+			<span class="wj-mobile-viewer-trigger__hint"><?php esc_html_e('Tap to enlarge', 'twentytwentyfive-child'); ?></span>
+		</button>
 		<div
 			id="<?php echo esc_attr($viewer_id); ?>"
 			class="wj-viewer"
@@ -716,6 +1022,60 @@ function wj_render_item_viewer(): string {
 				<?php endforeach; ?>
 			</div>
 		<?php endif; ?>
+	</div>
+	<div class="wj-viewer-modal" id="<?php echo esc_attr($viewer_id . '-modal'); ?>" data-wj-viewer-modal hidden>
+		<div class="wj-viewer-modal__backdrop" data-wj-modal-close></div>
+		<div class="wj-viewer-modal__dialog" role="dialog" aria-modal="true" aria-label="<?php esc_attr_e('Image viewer', 'twentytwentyfive-child'); ?>">
+			<div class="wj-viewer-modal__toolbar">
+				<button type="button" class="wj-viewer-modal__close" data-wj-modal-close><?php esc_html_e('Close', 'twentytwentyfive-child'); ?></button>
+			</div>
+			<div class="wj-viewer-modal__stage">
+				<img
+					class="wj-viewer-modal__image"
+					src="<?php echo esc_url($primary_image); ?>"
+					alt=""
+					data-wj-modal-image
+				>
+			</div>
+			<?php if (count($images) > 1) : ?>
+				<div class="wj-viewer-modal__nav">
+					<button type="button" class="wj-viewer-modal__step" data-wj-modal-prev><?php esc_html_e('Previous image', 'twentytwentyfive-child'); ?></button>
+					<div class="wj-viewer-modal__count" data-wj-modal-count>
+						<?php
+						echo esc_html(
+							sprintf(
+								/* translators: 1: current image number, 2: total image count */
+								__('Image %1$d of %2$d', 'twentytwentyfive-child'),
+								1,
+								count($images)
+							)
+						);
+						?>
+					</div>
+					<button type="button" class="wj-viewer-modal__step" data-wj-modal-next><?php esc_html_e('Next image', 'twentytwentyfive-child'); ?></button>
+				</div>
+			<?php endif; ?>
+			<?php if (count($images) > 1) : ?>
+				<div class="wj-thumb-strip wj-thumb-strip--modal" aria-label="<?php esc_attr_e('Image thumbnails', 'twentytwentyfive-child'); ?>">
+					<?php foreach ($image_ids as $index => $image_id) : ?>
+						<?php $image_url = wp_get_attachment_image_url($image_id, 'full'); ?>
+						<?php if (!$image_url) : ?>
+							<?php continue; ?>
+						<?php endif; ?>
+						<button
+							class="wj-thumb-button"
+							type="button"
+							data-wj-modal-thumb
+							data-index="<?php echo esc_attr((string) $index); ?>"
+							data-image-src="<?php echo esc_url($image_url); ?>"
+							<?php echo 0 === $index ? 'aria-pressed="true"' : 'aria-pressed="false"'; ?>
+						>
+							<?php echo wp_get_attachment_image($image_id, 'wj-thumb'); ?>
+						</button>
+					<?php endforeach; ?>
+				</div>
+			<?php endif; ?>
+		</div>
 	</div>
 	<?php
 

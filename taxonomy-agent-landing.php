@@ -191,15 +191,16 @@ if (!function_exists('wj_render_agent_context_links')) {
 						<?php
 						while (have_posts()) :
 							the_post();
+							$item_link = wj_get_item_permalink_with_context(get_the_ID(), wj_get_current_browse_filters(), wj_get_current_browse_url());
 							?>
 							<article <?php post_class('wj-item-record'); ?>>
-								<a class="wj-item-record-image" href="<?php the_permalink(); ?>">
+								<a class="wj-item-record-image" href="<?php echo esc_url($item_link); ?>">
 									<?php if (has_post_thumbnail()) : ?>
 										<?php the_post_thumbnail('wj-card'); ?>
 									<?php endif; ?>
 								</a>
 								<div class="wj-item-record-body">
-									<h2 class="wj-item-record-title"><a href="<?php the_permalink(); ?>"><?php the_title(); ?></a></h2>
+									<h2 class="wj-item-record-title"><a href="<?php echo esc_url($item_link); ?>"><?php the_title(); ?></a></h2>
 									<?php echo wj_render_item_card_meta(); ?>
 									<?php if (has_excerpt()) : ?>
 										<div class="wj-item-record-excerpt"><?php the_excerpt(); ?></div>
