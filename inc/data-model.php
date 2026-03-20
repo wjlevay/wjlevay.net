@@ -12,6 +12,7 @@ const WJ_ITEM_META = [
 	'item_sort_date'    => 'string',
 	'item_year'         => 'integer',
 	'item_date_display' => 'string',
+	'item_publisher'    => 'string',
 	'item_condition'    => 'string',
 	'item_materials'    => 'string',
 	'item_dimensions'   => 'string',
@@ -39,6 +40,10 @@ const WJ_ITEM_META_UI = [
 	'item_date_display' => [
 		'label'       => 'Display Date',
 		'description' => 'Human-readable date shown on the front end, such as circa 1994 or March 8, 2019.',
+	],
+	'item_publisher'    => [
+		'label'       => 'Publisher',
+		'description' => 'Publisher or imprint, useful for books and printed matter.',
 	],
 	'item_condition'    => [
 		'label'       => 'Condition',

@@ -43,6 +43,7 @@ CSV_HEADERS = [
     "item_sort_date",
     "item_year",
     "item_date_display",
+    "item_publisher",
     "item_condition",
     "item_materials",
     "item_dimensions",
@@ -348,6 +349,19 @@ def build_display_date(sort_date: str, raw_date: str) -> str:
 
 def parse_filename(stem: str) -> ParsedMetadata:
     notes: list[str] = []
+    if " - " in stem and "_" not in stem:
+        author_raw, title_raw = [part.strip() for part in stem.split(" - ", 1)]
+        author = humanize_name(author_raw)
+        title = title_raw.strip() or stem
+        return ParsedMetadata(
+            title=title,
+            artists=author,
+            item_sort_date="",
+            item_year="",
+            item_date_display="",
+            parse_notes="No date parsed from filename.",
+        )
+
     raw_date, raw_label = normalize_date_prefix(stem)
     sort_date, item_year, date_notes = parse_date(raw_date)
     notes.extend(date_notes)
@@ -459,6 +473,7 @@ def build_rows(files: Iterable[Path], collection: str, item_source: str, dropbox
                 "item_sort_date": parsed.item_sort_date,
                 "item_year": parsed.item_year,
                 "item_date_display": parsed.item_date_display,
+                "item_publisher": "",
                 "item_condition": "",
                 "item_materials": "",
                 "item_dimensions": "",

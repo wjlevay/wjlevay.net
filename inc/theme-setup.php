@@ -10,6 +10,10 @@ if (!defined('ABSPATH')) {
 function wj_theme_enqueue_assets(): void {
 	$theme = wp_get_theme();
 	$version = $theme->get('Version');
+	$style_path = get_stylesheet_directory() . '/assets/css/site.css';
+	$script_path = get_stylesheet_directory() . '/assets/js/app.js';
+	$style_version = file_exists($style_path) ? (string) filemtime($style_path) : $version;
+	$script_version = file_exists($script_path) ? (string) filemtime($script_path) : $version;
 
 	wp_enqueue_style(
 		'twentytwentyfive-parent-style',
@@ -22,7 +26,7 @@ function wj_theme_enqueue_assets(): void {
 		'wj-theme-style',
 		get_stylesheet_directory_uri() . '/assets/css/site.css',
 		['twentytwentyfive-parent-style'],
-		$version
+		$style_version
 	);
 
 	wp_enqueue_script(
@@ -37,7 +41,7 @@ function wj_theme_enqueue_assets(): void {
 		'wj-theme-app',
 		get_stylesheet_directory_uri() . '/assets/js/app.js',
 		['open-seadragon'],
-		$version,
+		$script_version,
 		true
 	);
 

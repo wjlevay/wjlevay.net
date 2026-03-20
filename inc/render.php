@@ -250,7 +250,7 @@ function wj_render_item_browser(): string {
 			<span><?php esc_html_e('Filter and sort', 'twentytwentyfive-child'); ?></span>
 		</summary>
 		<form class="wj-filter-bar" method="get" action="<?php echo esc_url($action); ?>">
-			<label>
+			<label class="wj-filter-field wj-filter-field--search">
 				<span><?php esc_html_e('Search', 'twentytwentyfive-child'); ?></span>
 				<input type="search" name="s" value="<?php echo esc_attr($filters['search']); ?>" placeholder="<?php esc_attr_e('Band, tour, city, design...', 'twentytwentyfive-child'); ?>">
 			</label>
@@ -430,31 +430,32 @@ function wj_render_item_meta(): string {
 	$post_id = get_the_ID();
 	$display_date = (string) get_post_meta($post_id, 'item_date_display', true);
 	$sort_date = (string) get_post_meta($post_id, 'item_sort_date', true);
-	$fields = [
+	$lines = [];
+	$meta_values = [
+		'item_identifier'   => get_post_meta($post_id, 'item_identifier', true),
+		'item_date_display' => $display_date ?: $sort_date,
+		'item_publisher'    => get_post_meta($post_id, 'item_publisher', true),
+		'item_materials'    => get_post_meta($post_id, 'item_materials', true),
+		'item_dimensions'   => get_post_meta($post_id, 'item_dimensions', true),
+		'item_condition'    => get_post_meta($post_id, 'item_condition', true),
+		'item_rights'       => get_post_meta($post_id, 'item_rights', true),
+		'item_inscription'  => get_post_meta($post_id, 'item_inscription', true),
+	];
+
+	$meta_labels = [
 		'item_identifier'   => __('Identifier', 'twentytwentyfive-child'),
 		'item_date_display' => __('Date', 'twentytwentyfive-child'),
-		'item_inscription'  => __('Inscription / Notes', 'twentytwentyfive-child'),
+		'item_publisher'    => __('Publisher', 'twentytwentyfive-child'),
 		'item_materials'    => __('Materials', 'twentytwentyfive-child'),
 		'item_dimensions'   => __('Dimensions', 'twentytwentyfive-child'),
 		'item_condition'    => __('Condition', 'twentytwentyfive-child'),
 		'item_rights'       => __('Rights', 'twentytwentyfive-child'),
+		'item_inscription'  => __('Inscription / Notes', 'twentytwentyfive-child'),
 	];
 
-	$lines = [];
-	foreach ($fields as $meta_key => $label) {
-		$value = 'item_date_display' === $meta_key ? ($display_date ?: $sort_date) : get_post_meta($post_id, $meta_key, true);
-		if ('' === $value || null === $value) {
-			continue;
-		}
-
-		if ('item_event_link' === $meta_key) {
-			$lines[] = sprintf(
-				'<li><span>%s</span><div><a href="%s" target="_blank" rel="noreferrer noopener">%s</a></div></li>',
-				esc_html($label),
-				esc_url((string) $value),
-				esc_html__('View event resource', 'twentytwentyfive-child')
-			);
-			continue;
+	$append_meta_line = static function (array &$lines, string $label, mixed $value): void {
+		if ('' === (string) $value || null === $value) {
+			return;
 		}
 
 		$lines[] = sprintf(
@@ -462,9 +463,13 @@ function wj_render_item_meta(): string {
 			esc_html($label),
 			esc_html((string) $value)
 		);
-	}
+	};
+
+	$append_meta_line($lines, $meta_labels['item_identifier'], $meta_values['item_identifier']);
+	$append_meta_line($lines, $meta_labels['item_date_display'], $meta_values['item_date_display']);
 
 	$lines[] = wj_render_agent_term_list($post_id);
+	$append_meta_line($lines, $meta_labels['item_publisher'], $meta_values['item_publisher']);
 	$lines[] = wj_render_linked_term_list($post_id, 'production', __('Production', 'twentytwentyfive-child'));
 	$lines[] = wj_render_linked_term_list($post_id, 'venue', __('Venue', 'twentytwentyfive-child'));
 	$lines[] = wj_render_linked_term_list($post_id, 'location', __('Location', 'twentytwentyfive-child'));
@@ -479,6 +484,11 @@ function wj_render_item_meta(): string {
 	}
 	$lines[] = wj_render_linked_term_list($post_id, 'item_tag', __('Subject', 'twentytwentyfive-child'));
 	$lines[] = wj_render_linked_term_list($post_id, 'collection', __('Collection', 'twentytwentyfive-child'));
+	$append_meta_line($lines, $meta_labels['item_materials'], $meta_values['item_materials']);
+	$append_meta_line($lines, $meta_labels['item_dimensions'], $meta_values['item_dimensions']);
+	$append_meta_line($lines, $meta_labels['item_condition'], $meta_values['item_condition']);
+	$append_meta_line($lines, $meta_labels['item_rights'], $meta_values['item_rights']);
+	$append_meta_line($lines, $meta_labels['item_inscription'], $meta_values['item_inscription']);
 
 	ob_start();
 	?>
